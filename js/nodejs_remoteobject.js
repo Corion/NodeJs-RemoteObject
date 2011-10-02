@@ -136,9 +136,9 @@ function remoteObject(options) {
             return function() {
                 var myargs = arguments;
                 repl.eventQueue.push({
-                    cbid : id,
-                    ts   : Number(new Date()),
-                    args : repl.link(myargs)
+                    "cbid" : id,
+                    "ts"   : Number(new Date()),
+                    "args" : repl.link(myargs)
                 });
             };
     };
