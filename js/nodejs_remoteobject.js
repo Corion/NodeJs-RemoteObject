@@ -14,6 +14,11 @@ var delim = /^\s*(\{[^\012]+?\})\s*\012/;
 
 // TODO: Make into dispatcher object
 var commands = {
+    // This is purely for self-tests, but oh so convenient
+    "echo": function(d,socket) {
+        socket.write(JSON.stringify(d));
+        return 1;
+    },
     "quit": function(d,socket) {
         return 0;
     },
@@ -33,29 +38,27 @@ function newConnection (socket) {
     var buffer = "";
     socket.on('data', function (data) {
         buffer += data;
-        console.log(buffer);
-        var wantQuit;
+        //console.warn("NODE: "+buffer);
+        var doContinue;
         var match;
         while (match = delim.exec(buffer)) {
-            buffer = buffer.substring(match[1].length);
+            // Skip all we matched
+            buffer = buffer.substring(match[0].length);
             if (match[1].length) {
-                console.log("Parsing <%s>", match[1]);
+                //console.warn("NODE: Parsing <%s>", match[1]);
                 var req;
                 try {
                     req = JSON.parse(match[1]);
                 } catch(e) {
-                    console.log(e.description);
+                    //console.log(e.description);
                     socket.write(JSON.stringify({"result": "error", "error":e.description}));
                 };
                 if( req ) {
-                    console.log("Deparsed to <%j>",req);
-                    console.log("<%s>",req.command);
-                    
                     var dispatch;
                     if(dispatch= commands[ req.command ]) {
-                        wantQuit = !dispatch( req, socket );
+                        doContinue= dispatch( req, socket );
                     };
-                    if( wantQuit ) {
+                    if( !doContinue ) {
                       console.log("Quitting");
                       socket.end('bye');
                       socket.destroySoon();

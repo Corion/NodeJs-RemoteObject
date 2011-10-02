@@ -24,7 +24,7 @@ sub run {
             unless exists $args{ $passthrough };
     };
     
-    my @args = map { $args{$_} } (qw(bin js));
+    my @args = map { defined $args{ $_ } ? $args{$_} : $self->{ $_ } } (qw(bin js));
     
     if ($^O eq 'MSWin32') {
         my $cmd = join " ", map {
@@ -41,14 +41,20 @@ sub run {
         $self->{pid} = open $self->{fh}, "-|", @args
             or die "Couldn't launch [@args]: $! / $?";
     }
+    $self
+}
+
+sub shutdown {
+    delete $_[0]->{fh};
+    # Clean up the hard way!
+    kill 9 => $_[0]->{pid};
+    delete @{$_[0]}{qw(pid fh)};
 }
 
 sub DESTROY {
+    warn "$_[0] destroys";
     if( $_[0]->{pid} ) {
-        close $_[0]->{fh};
-        
-        # Clean up the hard way!
-        kill 9 => $_[0]->{pid};
+        $_[0]->shutdown
     };
 }
 
