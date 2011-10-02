@@ -189,13 +189,16 @@ var commands = {
     },
     null: function(d,socket) {
         // dispatch to repl
+        console.warn("NODE: Dispatching <%s> %j", d.command,d.args);
         var disp= repl[ d.command ];
-        var req= d.msgid;
-        var res= disp.apply(d.args, repl);
+        var msgid= d.msgid;
+        var res= disp.apply(repl, d.args);
         if(! res.msgid) {
             res.msgid= msgid;
         };
+        //console.warn("NODE: Sending %j", res);
         socket.write(JSON.stringify(res));
+        return 1
     }
 };
 

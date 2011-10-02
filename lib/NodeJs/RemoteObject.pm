@@ -4,6 +4,7 @@ use AnyEvent;
 use AnyEvent::Handle;
 use NodeJs;
 use JSON;
+use Carp qw(croak);
 use Data::Dumper;
 
 # TODO: Find good way to distribute JS part
@@ -24,8 +25,11 @@ sub new {
     $args{ fh } ||= AnyEvent::Handle->new(
         connect => [ $args{ address }, $args{ port } ],
     );
+    $args{ queue }||= [];
     bless \%args => $class;
 };
+
+sub queue { $_[0]->{queue} };
 
 sub DESTROY {
     if( $_[0]->{shutdown} ) {
@@ -64,6 +68,8 @@ sub send_a {
     #warn "Sent " . Dumper $data;
     $self->{fh}->push_write( json => $data );
     $self->{fh}->push_write( "\012" );
+    # Ideally, we would filter here and dispatch until
+    # we get the appropriate msgid back
     $self->{fh}->push_read( json => $s );
     $cb
 }
@@ -85,5 +91,46 @@ sub echo {
     my $res = $self->echo_a($struct)->recv;
     $res->{struct}
 }
+
+sub repl_API {
+    my ($self,$call,@args) = @_;
+    return {
+        command => $call,
+        args => \@args,
+        msgid => $self->{msgid}++,
+    }
+};
+
+sub js_call {
+    my ($self,$js,$context) = @_;
+    $context ||= '';
+    $self->{stats}->{roundtrip}++;
+    my $queue = [splice @{ $self->queue }];
+        
+    my @js;
+    if (@$queue) {
+        $self->{fh}->push_write( json => $self->repl_API('q', @$queue) );
+        $self->{fh}->push_write( "\012" );
+    };
+    $js= $self->repl_API('ejs', $js, $context );
+    
+    if (defined wantarray) {
+        # When going async, we would want to turn this into a callback
+        my $res = $self->send_a($js)->recv;
+        if ($res->{status} eq 'ok') {
+            return $res->{result}
+        } else {
+            # reraise the JS exception locally
+            croak ((ref $self).": $res->{name}: $res->{message}");
+        };
+    } else {
+        #warn "Executing $js";
+        # When going async, we would want to turn this into a callback
+        # This produces additional, bogus prompts...
+        $self->send_a($js)->recv;
+        ()
+    };
+};
+
 
 1;
