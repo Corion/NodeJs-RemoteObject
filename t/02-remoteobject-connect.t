@@ -22,3 +22,5 @@ my $node = NodeJs::RemoteObject->new(
 };
 
 undef $node;
+
+exit 0;
