@@ -6,7 +6,7 @@ var port = 0; // random port
 var version = "0.01";
 
 // The protocol is JSON objects, delimited by newlines (because I'm lazy)
-var delim = /^(\{.+\})\s*\n/;
+var delim = /^\s*(\{[^\012]+?\})\s*\012/;
 
 // TODO: Make console logging configurable
 // TODO: Make port (re)configurable
