@@ -1,0 +1,11 @@
+Makefile
+Makefile.old
+*.tar.gz
+*.bak
+pm_to_blib
+blib/
+NodeJs/RemoteObject-*
+NodeJs/RemoteObject-*/
+.releaserc
+cover_db
+nodejs-versions/
