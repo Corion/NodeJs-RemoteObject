@@ -12,7 +12,7 @@ var delim = /^\s*(\{[^\012]+?\})\s*\012/;
 // TODO: Make port (re)configurable
 // TODO: Investigate if .pause() is responsible for slow (re)connects
 
-// Add dispatcher object
+// TODO: Make into dispatcher object
 var commands = {
     "quit": function(d,socket) {
         return 0;
