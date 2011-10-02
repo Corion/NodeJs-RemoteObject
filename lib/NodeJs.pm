@@ -45,14 +45,13 @@ sub run {
 }
 
 sub shutdown {
-    delete $_[0]->{fh};
     # Clean up the hard way!
-    kill 9 => $_[0]->{pid};
+    kill 9, $_[0]->{pid};
+    close $_[0]->{fh};
     delete @{$_[0]}{qw(pid fh)};
 }
 
 sub DESTROY {
-    warn "$_[0] destroys";
     if( $_[0]->{pid} ) {
         $_[0]->shutdown
     };

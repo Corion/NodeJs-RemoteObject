@@ -30,7 +30,7 @@ sub new {
 sub DESTROY {
     if( $_[0]->{shutdown} ) {
         if($_[0]->{fh}) {
-            warn "Closing socket";
+            #warn "Closing socket";
             $_[0]->{fh}->push_shutdown(to_json({command => 'quitserver'}). "\012");
         };
         undef $_[0]->{ nodejs_app };
