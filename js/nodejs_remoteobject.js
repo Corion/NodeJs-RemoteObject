@@ -15,6 +15,7 @@ var delim = /^\s*(\{[^\012]+?\})\s*\012/;
 function remoteObject(options) {
     var repl = {
          "linkedVars": {}
+        ,"linkedIdNext": 1
         ,"eventQueue": []
     };
     
@@ -24,12 +25,6 @@ function remoteObject(options) {
     };
     
     repl.link = function(obj) {
-        // These values should go into a closure instead of attaching to the repl
-        if (! repl.linkedVars) {
-            repl.linkedVars = {};
-            repl.linkedIdNext = 1;
-        };
-        
         if (obj) {
             repl.linkedVars[ repl.linkedIdNext ] = obj;
             return repl.linkedIdNext++;
@@ -130,7 +125,6 @@ function remoteObject(options) {
         return f.apply(obj, args);
     };
 
-
     repl.makeCatchEvent = function(myid) {
             var id = myid;
             return function() {
@@ -156,6 +150,7 @@ function remoteObject(options) {
     repl.ejs = function (js,context) {
         try {
             var res = eval(js);
+            //console.warn("NODE: ejs result %j", res);
             return repl.ok(res,context);
         } catch(e) {
             return {
@@ -189,7 +184,7 @@ var commands = {
     },
     null: function(d,socket) {
         // dispatch to repl
-        console.warn("NODE: Dispatching <%s> %j", d.command,d.args);
+        //console.warn("NODE: Dispatching <%s> %j", d.command,d.args);
         var disp= repl[ d.command ];
         var msgid= d.msgid;
         var res= disp.apply(repl, d.args);
