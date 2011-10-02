@@ -47,7 +47,8 @@ sub DESTROY {
 Sends data over to nodejs and returns a guard
 for receiving data back.
 
-This does not really respect overlapping requests/responses.
+This does not really respect overlapping requests/responses
+or asynchronous events.
 
 =cut
 
@@ -72,6 +73,12 @@ sub echo_a {
     $self->send_a({command => 'echo', struct => $struct});
 }
 
+=head2 C<< $bridge->echo >>
+
+A self-test routine that just exercises the JSON encoding/decoding
+mechanisms on both sides.
+
+=cut
 
 sub echo {
     my ($self, $struct) = @_;
