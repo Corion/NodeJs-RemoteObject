@@ -156,10 +156,12 @@ sub object_identity {
         or die "Internal inconsistency - no id found for $self";
     my $right = id($other);
     my $bridge = bridge($self);
-    my $rn = $bridge->name;
-    my $data = $bridge->expr(<<JS);
-$rn.getLink($left)===$rn.getLink($right)
+    my $object_identity = $bridge->declare(<<JS);
+        function(repl,l,r) {
+            return repl.getLink(l)===repl.getLink(r)
+        };
 JS
+    $object_identity->($bridge,$left,$right);
 }
 
 1;
