@@ -117,9 +117,7 @@ when the Perl object gets released.
 
 =cut
 
-sub release_action {
-    hash_get_set( @_, 'release_action' );
-};
+sub release_action { hash_get_set( @_, 'release_action' ) };
 
 =head2 C<< $obj->NodeJs::RemoteObject::Methods::id >>
 
