@@ -45,11 +45,11 @@ in Perl:
 
 sub invoke {
     my ($self,$fn,@args) = @_;
-    my $id = $self->__id;
-    die unless $self->__id;
+    my $id = id($self);
+    die unless $id;
     
-    ($fn) = $self->NodeJs::RemoteObject::Methods::transform_arguments($fn);
-    @args = $self->NodeJs::RemoteObject::Methods::transform_arguments(@args);
+    ($fn) = transform_arguments($self,$fn);
+    @args = transform_arguments($self,@args);
     return bridge($self)->api_call('callMethod',$id,$fn,\@args);
 }
 
