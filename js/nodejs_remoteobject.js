@@ -195,13 +195,17 @@ var commands = {
         try {
             res= disp.apply(repl, d.args);
         } catch(e) {
-            console.warn("NODE: Internal error dispatching %j: %s", d, e.message);
+            console.warn("NODE: Internal error dispatching %j: %j", d, e);
+            res= {
+                 "status" : "error"
+                ,"error"  : e.description || e
+            };
         };
-        // console.warn("NODE: Got %j", res);
+        //console.warn("NODE: Got %j", res);
         if(! res.msgid) {
             res.msgid= msgid;
         };
-        //console.warn("NODE: Sending %j", res);
+        console.warn("NODE: Sending %j", res);
         socket.write(JSON.stringify(res));
         return 1
     }
@@ -228,7 +232,7 @@ function newConnection (socket) {
                     req = JSON.parse(match[1]);
                 } catch(e) {
                     //console.log(e.description);
-                    socket.write(JSON.stringify({"result": "error", "error":e.description}));
+                    socket.write(JSON.stringify({"status": "error", "error":e.description}));
                 };
                 if( req ) {
                     var dispatch;

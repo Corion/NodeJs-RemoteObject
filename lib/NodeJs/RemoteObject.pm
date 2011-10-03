@@ -193,7 +193,8 @@ sub api_call {
             return $self->unwrap($res->{result});
         } else {
             # reraise the JS exception locally
-            croak ((ref $self).": $res->{name}: $res->{message}");
+            #croak ((ref $self).": $res->{name}: $res->{message}");
+            croak ((ref $self).": $res->{error}");
         };
     } else {
         #warn "Executing $js";
