@@ -7,6 +7,23 @@ use JSON;
 use Carp qw(croak);
 use Data::Dumper;
 
+=head1 NAME
+
+NodeJs::RemoteObject - Perl-Javascript object bridge using nodejs
+
+=head1 SYNOPSIS
+
+    #!perl -w
+    use strict;
+    use NodeJs::RemoteObject;
+    
+    # use $ENV{MOZREPL} or localhost:4242
+    my $repl = NodeJs::RemoteObject->new();
+    
+    # tbd    
+
+=cut
+
 use vars qw[@CARP_NOT $VERSION];
 
 $VERSION = '0.01'; # will later go into sync with MozRepl::RemoteObject
