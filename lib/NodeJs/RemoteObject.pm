@@ -101,6 +101,34 @@ sub repl_API {
     }
 };
 
+# Unwrap the result, will in the future also be used
+# to handle async events
+sub dispatch_events {
+    my ($self,$data) = @_;
+    if (my $events = delete $data->{events}) {
+        my @ev = @$events;
+        for my $ev (@ev) {
+            $self->{stats}->{callback}++;
+            ($ev->{args}) = $self->link_ids($ev->{args});
+            $self->dispatch_callback($ev);
+            undef $ev; # release the memory early!
+        };
+    };
+    my $t = $data->{type} || '';
+    if ($t eq 'list') {
+        return map {
+            $_->{type}
+            ? $self->link_ids( $_->{result} )
+            : $_->{result}
+        } @{ $data->{result} };
+    } elsif ($data->{type}) {
+        return ($self->link_ids( $data->{result} ))[0]
+    } else {
+        return $data->{result}
+    };
+};
+
+
 sub js_call {
     my ($self,$js,$context) = @_;
     $context ||= '';
