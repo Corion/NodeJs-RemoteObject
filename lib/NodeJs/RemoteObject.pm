@@ -224,7 +224,7 @@ sub api_call {
         } else {
             # reraise the JS exception locally
             #croak ((ref $self).": $res->{name}: $res->{message}");
-            croak ((ref $self).": $res->{error}");
+            croak ((ref $self).": $res->{name}: $res->{error}");
         };
     } else {
         #warn "Executing $js";
@@ -335,6 +335,34 @@ sub declare {
     };
     $self->{functions}->{$js}
 };
+
+=head2 C<< $bridge->constant( $NAME ) >>
+
+    my $i = $bridge->constant( 'Components.interfaces.nsIWebProgressListener.STATE_STOP' );
+
+Fetches and caches a Javascript constant. If you use this to fetch
+and cache Javascript objects, this will create memory leaks, as these objects
+will not get released.
+
+=cut
+
+sub constant {
+    my ($self, $name) = @_;
+    if (! exists $self->{constants}->{$name}) {
+        $self->{constants}->{$name} = $self->expr($name);
+        if (ref $self->{constants}->{$name}) {
+            #warn "*** $name is an object.";
+            # Need to weaken the backlink of the constant-object
+            my $res = $self->{constants}->{$name};
+            my $ref = ref $res;
+            bless $res, "$ref\::HashAccess";
+            weaken $res->{bridge};
+            bless $res => $ref;
+        };
+    };
+    $self->{constants}->{ $name }
+};
+
 
 =head2 C<< $bridge->link_ids IDS >>
 
