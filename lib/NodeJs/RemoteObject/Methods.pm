@@ -37,8 +37,6 @@ in Perl:
 
     __attr
     __setAttr
-    __xpath
-    __click
     ...
 
 =cut

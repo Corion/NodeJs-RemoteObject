@@ -73,7 +73,7 @@ function remoteObject(options) {
     };
 
     repl.getAttr = function(id,attr) {
-        var v = repl.getLink(id)[attr];
+        var v = this.getLink(id)[attr];
         return repl.ok(v)
     };
 

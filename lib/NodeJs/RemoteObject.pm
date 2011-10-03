@@ -573,7 +573,8 @@ sub __attr {
     
     my $bridge = NodeJs::RemoteObject::Methods::bridge($self);
     $bridge->{stats}->{fetch}++;
-    return $bridge->api_call('getAttr',$id,$attr);
+    # We explicitly stringify the attribute here!
+    return $bridge->api_call('getAttr',$id,"$attr");
 }
 
 =head2 C<< $obj->__setAttr( $attribute, $value ) >>
