@@ -53,15 +53,33 @@ function remoteObject(options) {
         repl.linkedIdNext = 1;
     };
 
+    repl.unwrap = function(args) {
+        var res= [];
+        for( var i=0;i<args.length;i++ ) {
+            if( args[i].t === 'o' ) {
+                res.push( this.getLink(args[i].v));
+            } else {
+                res.push( args[i].v );
+            };
+        };
+        return res
+    };
+
     repl.ok = function(val,context) {
         return {
             "status":"ok",
-            "result": repl.wrapResults(val,context)
+            "result": this.wrapResults(val,context)
         };
     };
 
     repl.getAttr = function(id,attr) {
         var v = repl.getLink(id)[attr];
+        return repl.ok(v)
+    };
+
+    repl.setAttr = function(id,attr,value) {
+        var v= (this.unwrap([value]))[0];
+        repl.getLink(id)[attr] = v;
         return repl.ok(v)
     };
 
@@ -114,15 +132,17 @@ function remoteObject(options) {
         return obj
     };
 
-    repl.callThis = function(id,args) {
+    repl.callThis = function(id,args,context) {
         var obj = this.getLink(id);
-        var res = obj.apply(obj, args);
-        return this.ok(res)
+        var res = obj.apply(obj, this.unwrap(args));
+        return this.ok(res,context)
     };
 
     repl.callMethod = function(id,fn,args) { 
         var obj = this.getLink(id);
         var f = obj[fn];
+        args= this.unwrap(args);
+        //console.warn("Unwrapped %j", args);
         if (! f) {
             throw "Object has no function " + fn;
         }
@@ -192,6 +212,10 @@ var commands = {
         var disp= repl[ d.command ];
         var msgid= d.msgid;
         var res;
+        //console.warn("NODE: Unwrapping %j", d.args);
+        //console.warn("NODE: Unwrapped %j", args);
+
+        // Object unwrapping is duty of every called method        
         try {
             res= disp.apply(repl, d.args);
         } catch(e) {
@@ -205,7 +229,7 @@ var commands = {
         if(! res.msgid) {
             res.msgid= msgid;
         };
-        console.warn("NODE: Sending %j", res);
+        //console.warn("NODE: Sending %j", res);
         socket.write(JSON.stringify(res));
         return 1
     }

@@ -31,7 +31,6 @@ if (! $ok) {
 # create a nested object
 sub genObj {
     my ($repl,$val) = @_;
-    #my $rn = $repl->name;
     my $obj = $repl->expr(<<JS)
 (function(val) {
     return { bar: [ 'baz', { value: val } ] };
@@ -105,7 +104,8 @@ $ok = eval {
     @$bar = (1,2,3,4);
     1;
 };
-ok $ok, "We can assign lists to arrays";
+ok $ok, "We can assign lists to arrays"
+    or diag $@;
 is_deeply [as_list $bar], [1,2,3,4], "And we assign the right values";
 
 # Check that 4-arg splice is unsupported:

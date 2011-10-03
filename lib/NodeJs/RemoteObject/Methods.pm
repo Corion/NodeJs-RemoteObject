@@ -48,46 +48,9 @@ sub invoke {
     my $id = id($self);
     die unless $id;
     
-    ($fn) = transform_arguments($self,$fn);
-    @args = transform_arguments($self,@args);
-    return bridge($self)->api_call('callMethod',$id,$fn,\@args);
+    my $bridge= bridge($self);
+    return $bridge->api_call('callMethod',$id,$fn,[$bridge->transform_arguments(@args)]);
 }
-
-=head2 C<< $obj->NodeJs::RemoteObject::Methods::transform_arguments(@args) >>
-
-This method transforms the passed in arguments to their JSON string
-representations.
-
-Things that match C< /^(?:[1-9][0-9]*|0+)$/ > get passed through.
- 
-NodeJs::RemoteObject::Instance instances
-are transformed into strings that resolve to their
-Javascript global variables. Use the C<< ->expr >> method
-to get an object representing these.
- 
-It's also impossible to pass a negative or fractional number
-as a number through to Javascript, or to pass digits as a Javascript string.
-
-=cut
- 
-sub transform_arguments {
-    my $self = shift;
-    map {
-        if (ref and blessed $_ and $_->isa('NodeJs::RemoteObject::Instance')) {
-            croak "Object passthrough not yet implemented";
-            #sprintf "%s.getLink(%d)", bridge($_)->name, id($_)
-        } elsif (ref and blessed $_ and $_->isa('NodeJs::RemoteObject')) {
-            croak "Object/bridge passthrough not yet implemented";
-        } elsif (ref and ref eq 'CODE') { # callback
-            my $cb = $self->bridge->make_callback($_);
-            sprintf "%s.getLink(%d)", bridge($self)->name,
-                                      id($cb)
-        } else {
-            $_
-        }
-    } @_
-};
-
 
 # Helper to centralize the reblessing
 sub hash_get {
@@ -180,8 +143,7 @@ sub as_code {
         my (@args) = @_;
         my $bridge = bridge($self);
         
-        @args = transform_arguments($self,@args);
-        return $bridge->api_call('callThis',$id,\@args);
+        return $bridge->api_call('callThis',$id,[$bridge->transform_arguments(@args)],$context);
     };
 };
 

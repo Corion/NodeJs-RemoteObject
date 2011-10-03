@@ -1,6 +1,6 @@
 package NodeJs::RemoteObject;
 use strict;
-use Scalar::Util qw(weaken);
+use Scalar::Util qw(weaken blessed);
 use AnyEvent;
 use AnyEvent::Handle;
 use NodeJs;
@@ -102,7 +102,7 @@ sub send_a {
         undef $s;
         undef $cb;
     };
-    #warn "Sent " . Dumper $data;
+    #warn "Sending " . Dumper $data;
     $self->fh->push_write( json => $data );
     $self->fh->push_write( "\012" );
     # Ideally, we would filter here and dispatch until
@@ -128,6 +128,36 @@ sub echo {
     my $res = $self->echo_a($struct)->recv;
     $res->{struct}
 }
+
+
+=head2 C<< $bridge->transform_arguments(@args) >>
+
+This method transforms objects to their ids for
+communication across the process boundary.
+
+NodeJs::RemoteObject::Instance instances
+are transformed into strings that resolve to their
+Javascript global variables. Use the C<< ->expr >> method
+to get an object representing these.
+
+=cut
+ 
+sub transform_arguments {
+    my $self = shift;
+    map {
+        if (ref and blessed $_ and $_->isa('NodeJs::RemoteObject::Instance')) {
+            #croak "Object passthrough not yet implemented";
+            $_ = { t => 'o', v => NodeJs::RemoteObject::Methods::id($_) }
+        } elsif (ref and blessed $_ and $_->isa('NodeJs::RemoteObject')) {
+            croak "Object/bridge passthrough not yet implemented";
+        } elsif (ref and ref eq 'CODE') { # callback
+            my $cb = $self->bridge->make_callback($_);
+            $_ = { t => 'o', v => NodeJs::RemoteObject::Methods::id($cb) }
+        } else {
+            $_ = { t => 'v', v => $_ }
+        }
+    } @_
+};
 
 sub repl_API {
     my ($self,$call,@args) = @_;
@@ -240,6 +270,31 @@ sub expr {
     return $self->api_call('ejs',$js,$context);
 }
 
+=head2 C<< as_list( $array ) >>
+
+    for $_ in (as_list $array) {
+        print $_->{innerHTML},"\n";
+    };
+
+Efficiently fetches all elements from C< @$array >. This is
+functionally equivalent to writing
+
+    @$array
+
+except that it involves much less roundtrips between Javascript
+and Perl.
+
+=cut
+
+sub as_list {
+    my ($array) = @_;
+    my $bridge = $array->NodeJs::RemoteObject::Methods::bridge;
+    my $as_array = $bridge->declare(<<'JS','list');
+        function(a){return a}
+JS
+    $as_array->($array)
+};
+
 =head2 C<< $bridge->declare( $js, $context ) >>
 
 Shortcut to declare anonymous JS functions
@@ -300,31 +355,6 @@ sub link_ids {
     } @_
 }
 
-=head2 C<< as_list( $array ) >>
-
-    for $_ in (as_list $array) {
-        print $_->{innerHTML},"\n";
-    };
-
-Efficiently fetches all elements from C< @$array >. This is
-functionally equivalent to writing
-
-    @$array
-
-except that it involves much less roundtrips between Javascript
-and Perl.
-
-=cut
-
-sub as_list {
-    my ($array) = @_;
-    my $repl = $array->bridge;
-    my $as_array = $repl->declare(<<'JS','list');
-        function(a){return a}
-JS
-    $as_array->($array)
-};
-
 package # hide from CPAN
     NodeJs::RemoteObject::Instance;
 use strict;
@@ -339,10 +369,6 @@ use overload '%{}' => 'NodeJs::RemoteObject::Methods::as_hash',
              '&{}' => 'NodeJs::RemoteObject::Methods::as_code',
              '=='  => 'NodeJs::RemoteObject::Methods::object_identity',
              '""'  => sub { overload::StrVal $_[0] };
-
-#sub TO_JSON {
-#    sprintf "%s.getLink(%d)", $_[0]->bridge->name, $_[0]->__id
-#};
 
 =head1 HASH access
 
@@ -569,13 +595,8 @@ sub __setAttr {
         or die "No id given";
     my $bridge = $self->bridge;
     $bridge->{stats}->{store}++;
-    my $rn = $bridge->name;
-    my $json = $bridge->json;
-    $attr = $json->encode($attr);
-    ($value) = $self->__transform_arguments($value);
-    $self->bridge->js_call_to_perl_struct(<<JS);
-$rn.getLink($id)[$attr]=$value
-JS
+    ($value) = $bridge->transform_arguments($value);
+    $self->bridge->api_call('setAttr',$id,$attr,$value);
 }
 
 =head2 C<< $obj->__dive( @PATH ) >>
