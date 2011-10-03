@@ -467,24 +467,6 @@ Perl object.
 
 *bridge = \&NodeJs::RemoteObject::Methods::bridge;
 
-=head2 C<< $obj->__release_action >>
-
-Accessor for Javascript code that gets executed
-when the Perl object gets released.
-
-=cut
-
-sub __release_action {
-    my $class = ref $_[0];
-    bless $_[0], "$class\::HashAccess";
-    if (2 == @_) {
-        $_[0]->{release_action} = $_[1];
-    };
-    my $release_action = $_[0]->{release_action};
-    bless $_[0], $class;
-    $release_action
-};
-
 sub DESTROY {
     my $self = shift;
     local $@;

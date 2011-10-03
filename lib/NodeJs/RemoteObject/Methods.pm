@@ -88,6 +88,7 @@ sub transform_arguments {
     } @_
 };
 
+
 # Helper to centralize the reblessing
 sub hash_get {
     my $class = ref $_[0];
@@ -107,6 +108,17 @@ sub hash_get_set {
     };
     bless $_[0], $class;
     $res
+};
+
+=head2 C<< $obj->NodeJs::RemoteObject::Methods::release_action >>
+
+Accessor for Javascript code that gets executed
+when the Perl object gets released.
+
+=cut
+
+sub release_action {
+    hash_get_set( @_, 'release_action' );
 };
 
 =head2 C<< $obj->NodeJs::RemoteObject::Methods::id >>
@@ -148,7 +160,6 @@ Returns a reference to a hash/array/coderef. This is used
 by L<overload>. Don't use these directly.
 
 =cut
-
 
 sub as_hash {
     my $self = shift;
