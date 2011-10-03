@@ -42,6 +42,10 @@ function remoteObject(options) {
         for(i=0;i<l;i++) {
             delete repl.linkedVars[ arguments[i] ];
         };
+        return {
+            "status":"ok",
+            "result":null
+        };
     };
 
     repl.purgeLinks = function() {
@@ -58,7 +62,7 @@ function remoteObject(options) {
 
     repl.getAttr = function(id,attr) {
         var v = repl.getLink(id)[attr];
-        return v
+        return repl.ok(v)
     };
 
     repl.wrapValue = function(v,context) {
@@ -88,8 +92,7 @@ function remoteObject(options) {
     repl.wrapResults = function(v,context) {
         var payload = repl.wrapValue(v,context);
         if (repl.eventQueue.length) {
-            payload.events = repl.eventQueue;
-            repl.eventQueue = [];
+            payload.events = repl.eventQueue.splice(0,repl.eventQueue.length);
         };
         return payload;
     };
@@ -100,6 +103,7 @@ function remoteObject(options) {
         for (var idx=0;idx <elts.length; idx++) {
             var e = elts[idx];
             // because "in" doesn't seem to look at inherited properties??
+            // XXX How does this handle obj[e] === 0 with an inherited property e?
             if (e in obj || obj[e]) {
                 last = e;
                 obj = obj[ e ];
@@ -187,7 +191,13 @@ var commands = {
         //console.warn("NODE: Dispatching <%s> %j", d.command,d.args);
         var disp= repl[ d.command ];
         var msgid= d.msgid;
-        var res= disp.apply(repl, d.args);
+        var res;
+        try {
+            res= disp.apply(repl, d.args);
+        } catch(e) {
+            console.warn("NODE: Internal error dispatching %j: %s", d, e.message);
+        };
+        // console.warn("NODE: Got %j", res);
         if(! res.msgid) {
             res.msgid= msgid;
         };
@@ -226,15 +236,23 @@ function newConnection (socket) {
                     if (! dispatch) {
                         dispatch= commands[ null ];
                     };
+                    //console.warn("dispatching %j", req);
                     doContinue= dispatch( req, socket );
                     if( !doContinue ) {
-                      console.log("Quitting");
-                      socket.end('bye');
+                      //console.warn("Quitting");
+                      socket.end();
                       socket.destroySoon();
                     };
                 };
             };
         };
+    });
+    
+    // Client has gone away, ignore
+    socket.on('error', function(e) {
+        console.warn(e.description);
+        socket.end();
+        socket.destroy();
     });
 };
 
