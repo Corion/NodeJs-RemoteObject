@@ -149,7 +149,7 @@ sub transform_arguments {
             #croak "Object passthrough not yet implemented";
             $_ = { t => 'o', v => NodeJs::RemoteObject::Methods::id($_) }
         } elsif (ref and blessed $_ and $_->isa('NodeJs::RemoteObject')) {
-            croak "Object/bridge passthrough not yet implemented";
+            $_ = { t => 's', v => undef } # ourselves
         } elsif (ref and ref eq 'CODE') { # callback
             my $cb = $self->bridge->make_callback($_);
             $_ = { t => 'o', v => NodeJs::RemoteObject::Methods::id($cb) }

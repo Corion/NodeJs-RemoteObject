@@ -58,6 +58,8 @@ function remoteObject(options) {
         for( var i=0;i<args.length;i++ ) {
             if( args[i].t === 'o' ) {
                 res.push( this.getLink(args[i].v));
+            } else if( args[i].t === 's' ) {
+                res.push( this );
             } else {
                 res.push( args[i].v );
             };
