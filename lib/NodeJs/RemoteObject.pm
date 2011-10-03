@@ -1,5 +1,6 @@
 package NodeJs::RemoteObject;
 use strict;
+use Scalar::Util qw(weaken);
 use AnyEvent;
 use AnyEvent::Handle;
 use NodeJs;
@@ -17,8 +18,10 @@ NodeJs::RemoteObject - Perl-Javascript object bridge using nodejs
     use strict;
     use NodeJs::RemoteObject;
     
-    # use $ENV{MOZREPL} or localhost:4242
-    my $repl = NodeJs::RemoteObject->new();
+    # launch node executable
+    my $repl = NodeJs::RemoteObject->new(
+        launch => 1
+    );
     
     # tbd    
 
@@ -27,9 +30,9 @@ NodeJs::RemoteObject - Perl-Javascript object bridge using nodejs
 use vars qw[@CARP_NOT $VERSION];
 
 $VERSION = '0.01'; # will later go into sync with MozRepl::RemoteObject
-@CARP_NOT = (qw[MozRepl::RemoteObject::Instance
-                MozRepl::RemoteObject::TiedHash
-                MozRepl::RemoteObject::TiedArray
+@CARP_NOT = (qw[NodeJs::RemoteObject::Instance
+                NodeJs::RemoteObject::TiedHash
+                NodeJs::RemoteObject::TiedArray
                ]);
 
 # TODO: Find good way to distribute JS part
@@ -55,7 +58,7 @@ sub new {
     $args{ functions } = {}; # cache
     $args{ constants } = {}; # cache
     $args{ callbacks } = {}; # active callbacks
-    $args{ instance } ||= 'MozRepl::RemoteObject::Instance'; # at least until I factor things out
+    $args{ instance } ||= 'NodeJs::RemoteObject::Instance'; # at least until I factor things out
 
     bless \%args => $class;
 };
@@ -175,6 +178,8 @@ sub api_call {
     $self->{stats}->{roundtrip}++;
     $self->flush_queue;
 
+    # TODO: Maybe this should also transform all ::Instance
+    # objects to/from their ids?!
     my $js= $self->repl_API($function,@args );
     
     if (defined wantarray) {
@@ -232,6 +237,47 @@ sub expr {
     return $self->api_call('ejs',$js,$context);
 }
 
+=head2 C<< $bridge->declare( $js, $context ) >>
+
+Shortcut to declare anonymous JS functions
+that will be cached in the bridge. This
+allows you to use anonymous functions
+in an efficient manner from your modules
+while keeping the serialization features
+of NodeJs::RemoteObject:
+
+  my $js = <<'JS';
+    function(a,b) {
+        return a+b
+    }
+  JS
+  my $fn = $self->bridge->declare($js);
+  $fn->($a,$b);
+
+The function C<$fn> will remain declared
+on the Javascript side
+until the bridge is torn down.
+
+If you expect an array to be returned and want the array
+to be fetched as list, pass C<'list'> as the C<$context>.
+
+=cut
+
+sub declare {
+    my ($self,$js,$context) = @_;
+    if (! $self->{functions}->{$js}) {
+        $self->{functions}->{$js} = $self->expr("var f=$js;\n;f");
+        # Weaken the backlink of the function
+        my $res = $self->{functions}->{$js};
+        my $ref = ref $res;
+        bless $res, "$ref\::HashAccess";
+        weaken $res->{bridge};
+        $res->{return_context} = $context;
+        bless $res => $ref;
+    };
+    $self->{functions}->{$js}
+};
+
 =head2 C<< $bridge->link_ids IDS >>
 
     $bridge->link_ids( 1,2,3 )
@@ -252,18 +298,18 @@ sub link_ids {
 }
 
 package # hide from CPAN
-    MozRepl::RemoteObject::Instance;
+    NodeJs::RemoteObject::Instance;
 use strict;
 use Carp qw(croak cluck);
 use Scalar::Util qw(blessed refaddr);
-use MozRepl::RemoteObject::Methods;
+use NodeJs::RemoteObject::Methods;
 use vars qw(@CARP_NOT);
-@CARP_NOT = 'MozRepl::RemoteObject::Methods';
+@CARP_NOT = 'NodeJs::RemoteObject::Methods';
 
-use overload '%{}' => 'MozRepl::RemoteObject::Methods::as_hash',
-             '@{}' => 'MozRepl::RemoteObject::Methods::as_array',
-             '&{}' => 'MozRepl::RemoteObject::Methods::as_code',
-             '=='  => 'MozRepl::RemoteObject::Methods::object_identity',
+use overload '%{}' => 'NodeJs::RemoteObject::Methods::as_hash',
+             '@{}' => 'NodeJs::RemoteObject::Methods::as_array',
+             '&{}' => 'NodeJs::RemoteObject::Methods::as_code',
+             '=='  => 'NodeJs::RemoteObject::Methods::object_identity',
              '""'  => sub { overload::StrVal $_[0] };
 
 #sub TO_JSON {
@@ -272,7 +318,7 @@ use overload '%{}' => 'MozRepl::RemoteObject::Methods::as_hash',
 
 =head1 HASH access
 
-All MozRepl::RemoteObject objects implement
+All NodeJs::RemoteObject objects implement
 transparent hash access through overloading, which means
 that accessing C<< $document->{body} >> will return
 the wrapped C<< document.body >> object.
@@ -306,9 +352,9 @@ Two objects are considered identical
 if the javascript C<===> operator
 returns true.
 
-  my $obj_a = MozRepl::RemoteObject->expr('window.document');
+  my $obj_a = NodeJs::RemoteObject->expr('window.document');
   print $obj_a->__id(),"\n"; # 42
-  my $obj_b = MozRepl::RemoteObject->expr('window.document');
+  my $obj_b = NodeJs::RemoteObject->expr('window.document');
   print $obj_b->__id(), "\n"; #43
   print $obj_a == $obj_b; # true
 
@@ -321,7 +367,7 @@ other than ASCII digits (C<< [0-9] >>). There currently
 is no way to specify that you want an all-digit parameter
 to be put in between double quotes.
 
-Passing MozRepl::RemoteObject objects as parameters in Perl
+Passing NodeJs::RemoteObject objects as parameters in Perl
 passes the proxied Javascript object as parameter to the Javascript method.
 
 As in Javascript, functions are first class objects, the following
@@ -334,10 +380,10 @@ two methods of calling a function are equivalent:
 =cut
 
 sub AUTOLOAD {
-    my $fn = $MozRepl::RemoteObject::Instance::AUTOLOAD;
+    my $fn = $NodeJs::RemoteObject::Instance::AUTOLOAD;
     $fn =~ s/.*:://;
     my $self = shift;
-    return $self->MozRepl::RemoteObject::Methods::invoke($fn,@_)
+    return $self->NodeJs::RemoteObject::Methods::invoke($fn,@_)
 }
 
 =head1 EVENTS / CALLBACKS
@@ -371,7 +417,7 @@ activity happens.
 
 In the long run,
 a move to L<AnyEvent> would make more sense, but currently,
-MozRepl::RemoteObject is still under heavy development on
+NodeJs::RemoteObject is still under heavy development on
 many fronts so that has been postponed.
 
 =head1 OBJECT METHODS
@@ -386,7 +432,7 @@ METHOD name contains characters not valid in a Perl variable name
 To invoke a Javascript objects native C<< __invoke >> method (if such a
 thing exists), please use:
 
-    $object->MozRepl::RemoteObject::Methods::invoke::invoke('__invoke', @args);
+    $object->NodeJs::RemoteObject::Methods::invoke::invoke('__invoke', @args);
 
 The same method can be used to call the Javascript functions with the
 same name as other convenience methods implemented
@@ -400,36 +446,7 @@ by this package:
 
 =cut
 
-*__invoke = \&MozRepl::RemoteObject::Methods::invoke;
-
-=head2 C<< $obj->__transform_arguments(@args) >>
-
-This method transforms the passed in arguments to their JSON string
-representations.
-
-Things that match C< /^(?:[1-9][0-9]*|0+)$/ > get passed through.
- 
-MozRepl::RemoteObject::Instance instances
-are transformed into strings that resolve to their
-Javascript global variables. Use the C<< ->expr >> method
-to get an object representing these.
- 
-It's also impossible to pass a negative or fractional number
-as a number through to Javascript, or to pass digits as a Javascript string.
-
-=cut
- 
-*__transform_arguments = \&MozRepl::RemoteObject::Methods::transform_arguments;
-
-=head2 C<< $obj->__id >>
-
-Readonly accessor for the internal object id
-that connects the Javascript object to the
-Perl object.
-
-=cut
-
-*__id = \&MozRepl::RemoteObject::Methods::id;
+*__invoke = \&NodeJs::RemoteObject::Methods::invoke;
 
 =head2 C<< $obj->__on_destroy >>
 
@@ -438,7 +455,7 @@ that gets invoked from C<< DESTROY >>.
 
 =cut
 
-*__on_destroy = \&MozRepl::RemoteObject::Methods::on_destroy;
+*__on_destroy = \&NodeJs::RemoteObject::Methods::on_destroy;
 
 =head2 C<< $obj->bridge >>
 
@@ -448,7 +465,7 @@ Perl object.
 
 =cut
 
-*bridge = \&MozRepl::RemoteObject::Methods::bridge;
+*bridge = \&NodeJs::RemoteObject::Methods::bridge;
 
 =head2 C<< $obj->__release_action >>
 
@@ -471,10 +488,10 @@ sub __release_action {
 sub DESTROY {
     my $self = shift;
     local $@;
-    my $id = $self->__id();
-    return unless $self->__id();
+    my $id = $self->NodeJs::RemoteObject::Methods::id();
+    return unless $id;
     my $release_action;
-    if ($release_action = ($self->__release_action || '')) {
+    if ($release_action = ($self->NodeJs::RemoteObject::Methods::release_action || '')) {
         $release_action =~ s/\s+$//mg;
         $release_action = join '', 
             'var self = repl.getLink(id);',
@@ -482,19 +499,19 @@ sub DESTROY {
             ';self = null;',
         ;
     };
-    if (my $on_destroy = $self->__on_destroy) {
+    if (my $on_destroy = $self->NodeJs::RemoteObject::Methods::on_destroy) {
         #warn "Calling on_destroy";
         $on_destroy->($self);
     };
-    if ($self->bridge) { # not always there during global destruction
-        $self->bridge->expr($release_action)
+    if (my $bridge= $self->NodeJs::RemoteObject::Methods::bridge) { # not always there during global destruction
+        $bridge->expr($release_action)
             if ($release_action);
         # XXX Breaking the links is queueable, so we should do
         # bulk releases instead of releasing each object in a roundtrip
-        $self->bridge->api_call('breakLink',$id);
+        $bridge->api_call('breakLink',$id);
         1
     } else {
-        if ($MozRepl::RemoteObject::WARN_ON_LEAKS) {
+        if ($NodeJs::RemoteObject::WARN_ON_LEAKS) {
             warn "Can't release JS part of object $self / $id ($release_action)";
         };
     };
@@ -515,10 +532,10 @@ is identical to
 
 sub __attr {
     my ($self,$attr,$context) = @_;
-    my $id = MozRepl::RemoteObject::Methods::id($self)
+    my $id = NodeJs::RemoteObject::Methods::id($self)
         or die "No id given";
     
-    my $bridge = MozRepl::RemoteObject::Methods::bridge($self);
+    my $bridge = NodeJs::RemoteObject::Methods::bridge($self);
     $bridge->{stats}->{fetch}++;
     return $bridge->api_call('getAttr',$id,$attr);
 }
@@ -538,7 +555,7 @@ is identical to
 
 sub __setAttr {
     my ($self,$attr,$value) = @_;
-    my $id = MozRepl::RemoteObject::Methods::id($self)
+    my $id = NodeJs::RemoteObject::Methods::id($self)
         or die "No id given";
     my $bridge = $self->bridge;
     $bridge->{stats}->{store}++;
@@ -641,112 +658,7 @@ JS
     return $getValues->($self);
 }
 
-=head2 C<< $obj->__xpath( $query [, $ref ] ) >>
-
-B<DEPRECATED> - this method will vanish in 0.23.
-Use L<MozRepl::RemoteObject::Methods::xpath> instead:
-
-  $obj->MozRepl::RemoteObject::Methods::xpath( $query )
-
-Executes an XPath query and returns the node
-snapshot result as a list.
-
-This is a convenience method that should only be called
-on HTMLdocument nodes.
-
-=cut
-
-sub __xpath {
-    my ($self,$query,$ref) = @_; # $self is a HTMLdocument
-    $ref ||= $self;
-    my $js = <<'JS';
-    function(doc,q,ref) {
-        var xres = doc.evaluate(q,ref,null,XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null );
-        var res = [];
-        for ( var i=0 ; i < xres.snapshotLength; i++ )
-        {
-            res.push( xres.snapshotItem(i));
-        };
-        return res
-    }
-JS
-    my $snap = $self->bridge->declare($js,'list');
-    $snap->($self,$query,$ref);
-}
-
-=head2 C<< $obj->__click >>
-
-Sends a Javascript C<click> event to the object.
-
-This is a convenience method that should only be called
-on HTMLdocument nodes or their children.
-
-=cut
-
-sub __click {
-    my ($self) = @_; # $self is a HTMLdocument or a descendant!
-    $self->__event('click');
-}
-
-=head2 C<< $obj->__change >>
-
-Sends a Javascript C<change> event to the object.
-
-This is a convenience method that should only be called
-on HTMLdocument nodes or their children.
-
-=cut
-
-sub __change {
-    my ($self) = @_; # $self is a HTMLdocument or a descendant!
-    $self->__event('change');
-}
-
-=head2 C<< $obj->__event TYPE >>
-
-Sends a Javascript event of type C<TYPE> to the object.
-
-This is a convenience method that should only be called
-on HTMLdocument nodes or their children.
-
-=head3 Send a C<focus>, C<change> and C<blur> event to an element
-
-The following code simulates the events sent by the
-user entering a value into a field:
-
-  $elt->__event('focus');
-  $elt->{value} = 'Hello';
-  $elt->__event('change');
-  $elt->__event('blur');
-  
-=cut
-
-sub __event {
-    my ($self,$type) = @_;
-    my $fn;
-    if ($type eq 'click') {
-        $fn = $self->bridge->declare(<<'JS');
-        function(target,name) {
-            var event = target.ownerDocument.createEvent('MouseEvents');
-            event.initMouseEvent(name, true, true, window,
-                                 0, 0, 0, 0, 0, false, false, false,
-                                 false, 0, null);
-            target.dispatchEvent(event);
-        }
-JS
-    } else {
-        $fn = $self->bridge->declare(<<'JS');
-        function(target,name) {
-        var event = target.ownerDocument.createEvent('Events');
-        event.initEvent(name, true, true);
-        target.dispatchEvent(event);
-    }
-JS
-    };
-    $fn->($self,$type);
-};
-
-=head2 C<< MozRepl::RemoteObject::Instance->new( $bridge, $ID, $onDestroy ) >>
+=head2 C<< NodeJs::RemoteObject::Instance->new( $bridge, $ID, $onDestroy ) >>
 
 This creates a new Perl object that's linked to the
 Javascript object C<ID>. You usually do not call this
@@ -771,7 +683,7 @@ C<id> - the numerical Javascript object id of this object
 
 =item *
 
-C<repl> - the L<MozRepl> Javascript C<repl> object
+C<repl> - the L<NodeJs> Javascript C<repl> object
 
 =back
 
@@ -799,7 +711,7 @@ sub new {
 };
 
 package # don't index this on CPAN
-  MozRepl::RemoteObject::TiedHash;
+  NodeJs::RemoteObject::TiedHash;
 use strict;
 
 sub TIEHASH {
@@ -882,7 +794,7 @@ JS
 1;
 
 package # don't index this on CPAN
-  MozRepl::RemoteObject::TiedArray;
+  NodeJs::RemoteObject::TiedArray;
 use strict;
 
 sub TIEARRAY {
@@ -929,7 +841,7 @@ sub SPLICE {
     my $obj = $tied->{impl};
     $from ||= 0;
     $count ||= $obj->{length};
-    MozRepl::RemoteObject::as_list $obj->splice($from,$count,@_);
+    NodeJs::RemoteObject::as_list $obj->splice($from,$count,@_);
 };
 
 sub CLEAR {
@@ -961,7 +873,7 @@ to be UTF-8.
 
 Implement automatic reblessing of JS objects into Perl objects
 based on a typemap instead of blessing everything into
-MozRepl::RemoteObject::Instance.
+NodeJs::RemoteObject::Instance.
 
 =back
 

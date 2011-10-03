@@ -115,9 +115,9 @@ function remoteObject(options) {
     };
 
     repl.callThis = function(id,args) {
-        var obj = repl.getLink(id);
+        var obj = this.getLink(id);
         var res = obj.apply(obj, args);
-        return res
+        return this.ok(res)
     };
 
     repl.callMethod = function(id,fn,args) { 
