@@ -116,8 +116,9 @@ function remoteObject(options) {
     };
 
     repl.dive = function(id,elts) {
-        var obj = repl.getLink(id);
+        var obj = this.getLink(id);
         var last = "<start object>";
+        elts= this.unwrap(elts);
         for (var idx=0;idx <elts.length; idx++) {
             var e = elts[idx];
             // because "in" doesn't seem to look at inherited properties??
@@ -129,7 +130,7 @@ function remoteObject(options) {
                 throw "Cannot dive: " + last + "." + e + " is empty.";
             };
         };
-        return obj
+        return this.ok(obj)
     };
 
     repl.callThis = function(id,args,context) {
@@ -219,7 +220,7 @@ var commands = {
         try {
             res= disp.apply(repl, d.args);
         } catch(e) {
-            console.warn("NODE: Internal error dispatching %j: %j", d, e);
+            // console.warn("NODE: Internal error dispatching %j: %j", d, e);
             res= {
                  "status" : "error"
                 ,"error"  : e.description || e

@@ -620,14 +620,12 @@ forest with Perl, but otherwise identical.
 
 sub __dive {
     my ($self,@path) = @_;
-    die unless $self->__id;
-    my $id = $self->__id;
-    my $rn = $self->bridge->name;
-    (my $path) = $self->__transform_arguments(\@path);
+    my $id = NodeJs::RemoteObject::Methods::id($self);
+    die unless $id;
+    my $bridge = NodeJs::RemoteObject::Methods::bridge($self);
+    (my $path) = [$bridge->transform_arguments(@path)];
     
-    my $data = $self->bridge->unjson(<<JS);
-$rn.dive($id,$path)
-JS
+    my $data = $self->bridge->api_call('dive',$id,$path);
 }
 
 =head2 C<< $obj->__keys() >>
