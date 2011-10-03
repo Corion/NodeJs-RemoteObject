@@ -121,12 +121,12 @@ function remoteObject(options) {
     };
 
     repl.callMethod = function(id,fn,args) { 
-        var obj = repl.getLink(id);
+        var obj = this.getLink(id);
         var f = obj[fn];
         if (! f) {
             throw "Object has no function " + fn;
         }
-        return f.apply(obj, args);
+        return this.ok(f.apply(obj, args));
     };
 
     repl.makeCatchEvent = function(myid) {

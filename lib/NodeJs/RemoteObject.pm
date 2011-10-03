@@ -7,6 +7,7 @@ use NodeJs;
 use JSON;
 use Carp qw(croak);
 use Data::Dumper;
+use Exporter 'import';
 
 =head1 NAME
 
@@ -27,7 +28,8 @@ NodeJs::RemoteObject - Perl-Javascript object bridge using nodejs
 
 =cut
 
-use vars qw[@CARP_NOT $VERSION];
+use vars qw[@CARP_NOT $VERSION @EXPORT_OK];
+@EXPORT_OK=qw[as_list];
 
 $VERSION = '0.01'; # will later go into sync with MozRepl::RemoteObject
 @CARP_NOT = (qw[NodeJs::RemoteObject::Instance
@@ -296,6 +298,31 @@ sub link_ids {
            : undef
     } @_
 }
+
+=head2 C<< as_list( $array ) >>
+
+    for $_ in (as_list $array) {
+        print $_->{innerHTML},"\n";
+    };
+
+Efficiently fetches all elements from C< @$array >. This is
+functionally equivalent to writing
+
+    @$array
+
+except that it involves much less roundtrips between Javascript
+and Perl.
+
+=cut
+
+sub as_list {
+    my ($array) = @_;
+    my $repl = $array->bridge;
+    my $as_array = $repl->declare(<<'JS','list');
+        function(a){return a}
+JS
+    $as_array->($array)
+};
 
 package # hide from CPAN
     NodeJs::RemoteObject::Instance;
