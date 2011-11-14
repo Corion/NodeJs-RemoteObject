@@ -385,6 +385,8 @@ sub link_ids {
     } @_
 }
 
+sub poll {}; # well - we are event / select() based, no need to poll
+
 package # hide from CPAN
     NodeJs::RemoteObject::Instance;
 use strict;
