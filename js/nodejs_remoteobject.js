@@ -146,22 +146,27 @@ function remoteObject(options) {
         var f = obj[fn];
         args= this.unwrap(args);
         //console.warn("Unwrapped %j", args);
-        if (! f) {
-            throw "Object has no function " + fn;
+        if (!f) {
+            //console.warn("No method %s", fn);
+            return {
+                "status":"error",
+                "name"  :"nomethod",
+                "error" :"Object has no function " + fn,
+            };
         }
         return this.ok(f.apply(obj, args));
     };
 
     repl.makeCatchEvent = function(myid) {
-            var id = myid;
-            return function() {
-                var myargs = arguments;
-                repl.eventQueue.push({
-                    "cbid" : id,
-                    "ts"   : Number(new Date()),
-                    "args" : repl.link(myargs)
-                });
-            };
+        var id = myid;
+        return this.ok(function() {
+            var myargs = arguments;
+            repl.eventQueue.push({
+                "cbid" : id,
+                "ts"   : Number(new Date()),
+                "args" : repl.link(myargs)
+            });
+        });
     };
 
     repl.q = function (queue) {
@@ -225,7 +230,7 @@ var commands = {
         try {
             res= disp.apply(repl, d.args);
         } catch(e) {
-            // console.warn("NODE: Internal error dispatching %j: %j", d, e);
+            //console.warn("NODE: Internal error dispatching %j: %j", d, e);
             res= {
                  "status" : "error"
                 ,"error"  : e.description || e

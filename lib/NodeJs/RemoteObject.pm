@@ -218,8 +218,6 @@ sub api_call {
         # When going async, we would want to turn this into a callback
         my $res = $self->send_a($js)->recv;
         if ($res->{status} eq 'ok') {
-            #use Data::Dumper;
-            #warn Dumper $res;
             return $self->unwrap($res->{result});
         } else {
             # reraise the JS exception locally
@@ -230,6 +228,10 @@ sub api_call {
         #warn "Executing $js";
         # When going async, we would want to turn this into a callback
         my $res=$self->send_a($js)->recv;
+        if ($res->{status} ne 'ok') {
+            # reraise the JS exception locally
+            croak ((ref $self).": $res->{name}: $res->{error}");
+        };
         $res= $self->unwrap($res->{result});
         ()
     };
