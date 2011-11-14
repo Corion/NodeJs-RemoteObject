@@ -557,8 +557,9 @@ sub DESTROY {
     my $release_action;
     if ($release_action = ($self->NodeJs::RemoteObject::Methods::release_action || '')) {
         $release_action =~ s/\s+$//mg;
+        my $id = $self->NodeJs::RemoteObject::Methods::id();
         $release_action = join '', 
-            'var self = repl.getLink(id);',
+            "var self = repl.getLink($id);",
             $release_action,
             ';self = null;',
         ;
