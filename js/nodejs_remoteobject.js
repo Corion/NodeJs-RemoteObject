@@ -180,7 +180,7 @@ function remoteObject(options) {
             //console.warn("NODE: ejs result %j", res);
             return repl.ok(res,context);
         } catch(e) {
-            //console.warn("NODE: ejs error %j", e);
+            //console.warn("NODE: ejs error %j / %s / %s / %s", e, e.name, e.message, js);
             return {
                 "status":"error",
                 "name"  : e.name,
