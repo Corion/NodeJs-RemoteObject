@@ -1,6 +1,6 @@
 package NodeJs::RemoteObject;
 use strict;
-use Scalar::Util qw(weaken blessed);
+use Scalar::Util qw(weaken blessed refaddr);
 use AnyEvent;
 use AnyEvent::Handle;
 use NodeJs;
@@ -52,9 +52,6 @@ sub new {
         $args{ shutdown } = 1
             unless exists $args{ shutdown };
     };
-    $args{ fh } ||= AnyEvent::Handle->new(
-        connect => [ $args{ address }, $args{ port } ],
-    );
     $args{ queue } ||= [];
     $args{ stats } ||= {};
     $args{ functions } = {}; # cache
@@ -62,7 +59,15 @@ sub new {
     $args{ callbacks } = {}; # active callbacks
     $args{ instance } ||= 'NodeJs::RemoteObject::Instance'; # at least until I factor things out
 
-    bless \%args => $class;
+    my $self = bless \%args => $class;
+    $args{ fh } ||= AnyEvent::Handle->new(
+        connect => [ $args{ address }, $args{ port } ],
+        #on_read => sub {
+        #    warn "Reading from socket without explicit fetch";
+        #    $_[0]->push_read( json => sub {$self->unwrap($_[1])} );
+        #},
+    );
+    $self
 };
 
 sub queue { $_[0]->{queue} };
@@ -151,7 +156,7 @@ sub transform_arguments {
         } elsif (ref and blessed $_ and $_->isa('NodeJs::RemoteObject')) {
             $_ = { t => 's', v => undef } # ourselves
         } elsif (ref and ref eq 'CODE') { # callback
-            my $cb = $self->bridge->make_callback($_);
+            my $cb = $self->make_callback($_);
             $_ = { t => 'o', v => NodeJs::RemoteObject::Methods::id($cb) }
         } else {
             $_ = { t => 'v', v => $_ }
@@ -173,9 +178,11 @@ sub repl_API {
 # to handle async events coming in
 sub unwrap {
     my ($self,$data) = @_;
+    #warn "Unwrapping " . Dumper $data;
     if (my $events = delete $data->{events}) {
         my @ev = @$events;
         for my $ev (@ev) {
+            #warn "Dispatching " . Dumper $ev;
             $self->{stats}->{callback}++;
             ($ev->{args}) = $self->link_ids($ev->{args});
             $self->dispatch_callback($ev);
@@ -214,10 +221,12 @@ sub api_call {
     # objects to/from their ids?!
     my $js= $self->repl_API($function,@args );
     
+    # XXX Centralize exception and callback dispatch
     if (defined wantarray) {
         # When going async, we would want to turn this into a callback
         my $res = $self->send_a($js)->recv;
         if ($res->{status} eq 'ok') {
+            #warn "Got OK, preparing to unwrap " . Dumper $res->{result};
             return $self->unwrap($res->{result});
         } else {
             # reraise the JS exception locally
@@ -232,6 +241,7 @@ sub api_call {
             # reraise the JS exception locally
             croak ((ref $self).": $res->{name}: $res->{error}");
         };
+        #warn Dumper $res->{result};
         $res= $self->unwrap($res->{result});
         ()
     };
@@ -385,7 +395,57 @@ sub link_ids {
     } @_
 }
 
-sub poll {}; # well - we are event / select() based, no need to poll
+# Creates a callback stub in nodejs that sends an event to Perl
+# Unfortunately, callbacks cannot be made synchronous in nodejs
+# until nodejs-fibers (coroutines for nodejs) becomes mainstream
+sub make_callback {
+    my ($self,$cb) = @_;
+    my $cbid = refaddr $cb;
+    my $res = $self->api_call('makeCatchEvent',$cbid);
+    croak "Couldn't create a callback"
+        if (! $res);
+
+    # Need to weaken the backlink of the constant-object
+    my $ref = ref $res;
+    bless $res, "$ref\::HashAccess";
+    weaken $res->{bridge};
+    bless $res => $ref;
+    
+    $self->{callbacks}->{$cbid} = {
+        callback => $cb, jsproxy => $res, where => [caller(1)],
+    };
+    $res
+};
+
+sub dispatch_callback {
+    my ($self,$info) = @_;
+    my $cbid = $info->{cbid};
+    if (! $cbid) {
+        croak "Unknown callback fired with values @{ $info->{ args }}";
+    };
+    if (exists $self->{callbacks}->{$cbid} and my $cb = $self->{callbacks}->{$cbid}->{callback}) {
+        # Replace with goto &$cb ?
+        my @args = as_list $info->{args};
+        $cb->(@args);
+    } else {
+        #warn "Unknown callback id $cbid (created in @{$self->{removed_callbacks}->{$cbid}->{where}})";
+    }
+};
+
+sub poll {
+    # well - we should be event / select() based...
+    # XXX Make this event based by making the JS immediately write the JSON event
+    # XXX Immediately writing on the JS side will break the event-handler/function identity
+    my $self= $_[0];
+    $self->expr("1==1");
+    #$self->fh->push_write( json => {command => "ejs", args => ["1==1", undef]} );
+    #$self->fh->push_write( "\012" );
+    #$self->fh->unshift_read(json => sub {
+    #    warn "Async callback/poll callback " . Dumper $_[1];
+    $self->unwrap($_[1]->{result});
+    #    undef $self
+    #});
+};
 
 package # hide from CPAN
     NodeJs::RemoteObject::Instance;
