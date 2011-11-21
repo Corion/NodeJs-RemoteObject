@@ -44,7 +44,7 @@ function remoteObject(options) {
         };
         return {
             "status":"ok",
-            "result":null
+            "result":this.wrapResults(null,null)
         };
     };
 
