@@ -76,13 +76,13 @@ function remoteObject(options) {
 
     repl.getAttr = function(id,attr) {
         var v = this.getLink(id)[attr];
-        return repl.ok(v)
+        return this.ok(v)
     };
 
     repl.setAttr = function(id,attr,value) {
         var v= (this.unwrap([value]))[0];
-        repl.getLink(id)[attr] = v;
-        return repl.ok(v)
+        this.getLink(id)[attr] = v;
+        return this.ok(v)
     };
 
     repl.wrapValue = function(v,context) {
@@ -110,9 +110,10 @@ function remoteObject(options) {
     }
 
     repl.wrapResults = function(v,context) {
-        var payload = repl.wrapValue(v,context);
-        if (repl.eventQueue.length) {
-            payload.events = repl.eventQueue.splice(0,repl.eventQueue.length);
+        var payload = this.wrapValue(v,context);
+        if (this.eventQueue.length) {
+            //console.warn("NODE: Returning %d events", this.eventQueue.length);
+            payload.events = this.eventQueue.splice(0,repl.eventQueue.length);
         };
         return payload;
     };
@@ -223,9 +224,7 @@ var commands = {
         var disp= repl[ d.command ];
         var msgid= d.msgid;
         var res;
-        //console.warn("NODE: Unwrapping %j", d.args);
-        //console.warn("NODE: Unwrapped %j", args);
-
+        
         // Object unwrapping is duty of every called method        
         try {
             res= disp.apply(repl, d.args);
@@ -236,11 +235,9 @@ var commands = {
                 ,"error"  : e.description || e
             };
         };
-        //console.warn("NODE: Got %j", res);
         if(! res.msgid) {
             res.msgid= msgid;
         };
-        //console.warn("NODE: Sending %j", res);
         socket.write(JSON.stringify(res));
         return 1
     }
